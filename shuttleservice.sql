@@ -1,0 +1,189 @@
+CREATE DATABASE CampusShuttleService1;
+USE CampusShuttleService1;
+
+
+CREATE TABLE USERS (
+    UserID BIGINT IDENTITY(1,1) PRIMARY KEY,
+    FullName VARCHAR(150) NOT NULL,
+    UserName VARCHAR(50) NOT NULL UNIQUE,
+    PasswordHash NVARCHAR(255) NOT NULL,
+    Email VARCHAR(100) NOT NULL UNIQUE,
+    PhoneNo VARCHAR(10) NOT NULL,
+    Role VARCHAR(10) NOT NULL CHECK (Role IN ('STUDENT','DRIVER','ADMIN')),
+    Status VARCHAR(10) NOT NULL DEFAULT 'ACTIVE'
+        CHECK (Status IN ('ACTIVE','INACTIVE')),
+    CreatedAt DATETIME NOT NULL DEFAULT GETDATE()
+);
+
+CREATE TABLE STUDENT (
+    UserID BIGINT PRIMARY KEY,
+    University VARCHAR(100) NOT NULL,
+    HomeAddress VARCHAR(255) NOT NULL,
+    ParentName VARCHAR(100) NOT NULL,
+    ParentPhoneNo VARCHAR(10) NOT NULL,
+    ParentEmail VARCHAR(100) NOT NULL,
+    StudentProfilePhoto VARCHAR(255) NULL,
+
+    FOREIGN KEY (UserID) REFERENCES USERS (UserID)
+);
+
+CREATE TABLE DRIVER (
+    UserID BIGINT PRIMARY KEY,
+    LicenseNo VARCHAR(50) NOT NULL UNIQUE,
+    LicenseDocument VARCHAR(255) NOT NULL,
+    VehicleDocument VARCHAR(255) NOT NULL,
+    VehicleType VARCHAR(10) NOT NULL CHECK (VehicleType IN ('Bus','Minibus')),
+    VehicleNumber VARCHAR(30) NOT NULL UNIQUE,
+    NumberOfSeats INT NOT NULL CHECK (NumberOfSeats > 0),
+    DriverProfilePhoto VARCHAR(255) NULL,
+
+    FOREIGN KEY (UserID) REFERENCES USERS (UserID)
+);
+
+
+CREATE TABLE ADMIN (
+    UserID BIGINT PRIMARY KEY,
+
+    FOREIGN KEY (UserID) REFERENCES USERS(UserID)
+);
+
+CREATE TABLE SHUTTLE_ROUTE (
+    ShuttleRouteID BIGINT IDENTITY(1,1) PRIMARY KEY,
+    BusNumber VARCHAR(20) NOT NULL UNIQUE,
+    StartLocation VARCHAR(100) NOT NULL,
+    EndLocation VARCHAR(100) NOT NULL,
+    DepartureTime TIME NOT NULL,
+    ArrivalTime TIME NOT NULL,
+    DurationMinutes INT NOT NULL CHECK (DurationMinutes > 0),
+    NumberOfStops INT NOT NULL CHECK (NumberOfStops >= 0),
+    
+    TotalSeats INT NOT NULL CHECK (TotalSeats > 0),
+    PricePerSeat DECIMAL(10,2) NOT NULL CHECK (PricePerSeat >= 0),
+
+    Status VARCHAR(15) NOT NULL DEFAULT 'Available'
+        CHECK (Status IN ('Available','NotAvailable')),
+    DriverID BIGINT NOT NULL,
+    FOREIGN KEY (DriverID) REFERENCES DRIVER(UserID)
+);
+
+CREATE TABLE BOOKING (
+     BookingID BIGINT IDENTITY(1,1) PRIMARY KEY,
+
+     BookingDateTime DATETIME NOT NULL DEFAULT GETDATE(),
+
+     TripDate DATE NOT NULL,   -- travel date
+
+     SelectedSeats INT NOT NULL 
+        CHECK (SelectedSeats > 0 AND SelectedSeats <= 2),
+
+     TotalAmount DECIMAL(10,2) NOT NULL 
+        CHECK (TotalAmount >= 0),
+
+     BookingStatus VARCHAR(15) NOT NULL DEFAULT 'CONFIRMED'
+        CHECK (BookingStatus IN ('CONFIRMED','CANCELLED')),
+
+     PassengerName VARCHAR(150) NOT NULL,
+     PassengerEmail VARCHAR(100) NOT NULL,
+     PassengerPhoneNo VARCHAR(10) NOT NULL,
+
+     StudentID BIGINT NOT NULL,
+     ShuttleRouteID BIGINT NOT NULL,
+
+     FOREIGN KEY (StudentID) REFERENCES STUDENT(UserID),
+     FOREIGN KEY (ShuttleRouteID) REFERENCES SHUTTLE_ROUTE(ShuttleRouteID)
+);
+
+
+
+
+CREATE TABLE BOOKING_SEAT (
+    BookingSeatID BIGINT IDENTITY(1,1) PRIMARY KEY,
+
+    SeatNumber INT NOT NULL 
+        CHECK (SeatNumber > 0),
+
+    BookingID BIGINT NOT NULL,
+    ShuttleRouteID BIGINT NOT NULL,
+    TripDate DATE NOT NULL,
+
+    FOREIGN KEY (BookingID) REFERENCES BOOKING(BookingID),
+    FOREIGN KEY (ShuttleRouteID) REFERENCES SHUTTLE_ROUTE(ShuttleRouteID),
+
+    CONSTRAINT UQ_SeatBooking UNIQUE (ShuttleRouteID, TripDate, SeatNumber)
+);
+
+
+CREATE TABLE PAYMENT (
+    PaymentID BIGINT IDENTITY(1,1) PRIMARY KEY,
+    PaymentDate DATETIME NOT NULL DEFAULT GETDATE(),
+    Amount DECIMAL(10,2) NOT NULL CHECK (Amount >= 0),
+    PaymentMethod VARCHAR(10) NOT NULL DEFAULT 'ONLINE',
+    
+    PaymentStatus VARCHAR(10) NOT NULL DEFAULT 'PAID'
+        CHECK (PaymentStatus IN ('PAID','FAILED')),
+
+    BookingID BIGINT NOT NULL UNIQUE,
+    FOREIGN KEY (BookingID) REFERENCES BOOKING(BookingID)
+);
+
+
+CREATE TABLE EMERGENCY_REPORT (
+    EmergencyID BIGINT IDENTITY(1,1) PRIMARY KEY,
+
+    EmergencyType VARCHAR(30) NOT NULL
+        CHECK (EmergencyType IN ('TIRE_PUNCH','ENGINE_ISSUE','MEDICAL_EMERGENCY','ACCIDENT','OTHER')),
+
+    LocationName VARCHAR(50) NOT NULL,
+
+    Description VARCHAR(255) NULL,
+
+    ReportedTime DATETIME NOT NULL DEFAULT GETDATE(),
+
+    Status VARCHAR(15) NOT NULL DEFAULT 'PENDING'
+        CHECK (Status IN ('PENDING','IN_PROGRESS','RESOLVED')),
+
+    ResolvedTime DATETIME NULL,
+
+    DriverID BIGINT NOT NULL,
+    ShuttleRouteID BIGINT NOT NULL,
+
+    ResolvedByAdminID BIGINT NULL,
+
+    FOREIGN KEY (DriverID) REFERENCES DRIVER(UserID),
+    FOREIGN KEY (ShuttleRouteID) REFERENCES SHUTTLE_ROUTE(ShuttleRouteID),
+    FOREIGN KEY (ResolvedByAdminID) REFERENCES ADMIN(UserID)
+);
+
+CREATE TABLE LIVE_TRACKING (
+    TrackingID BIGINT IDENTITY(1,1) PRIMARY KEY,
+    Latitude DECIMAL(10,7) NOT NULL CHECK (Latitude BETWEEN -90 AND 90),
+    Longitude DECIMAL(10,7) NOT NULL CHECK (Longitude BETWEEN -180 AND 180),
+    Speed DECIMAL(5,2) NULL CHECK (Speed >= 0),
+    TrackingTime DATETIME NOT NULL DEFAULT GETDATE(),
+    TripDate DATE NOT NULL,
+    ShuttleRouteID BIGINT NOT NULL,
+    DriverID BIGINT NOT NULL,
+     FOREIGN KEY (ShuttleRouteID) REFERENCES SHUTTLE_ROUTE(ShuttleRouteID),
+    FOREIGN KEY (DriverID) REFERENCES DRIVER(UserID)
+);
+CREATE TABLE NOTIFICATION (
+    NotificationID BIGINT IDENTITY(1,1) PRIMARY KEY,
+
+    Message VARCHAR(255) NOT NULL,
+
+    ReceiverType VARCHAR(10) NOT NULL
+        CHECK (ReceiverType IN ('STUDENT','PARENT')),
+
+    ReceiverPhone VARCHAR(10) NOT NULL,
+
+    SentTime DATETIME NOT NULL DEFAULT GETDATE(),
+
+    Status VARCHAR(15) NOT NULL DEFAULT 'SENT'
+        CHECK (Status IN ('SENT','FAILED','PENDING')),
+
+    BookingID BIGINT NULL,
+    StudentID BIGINT NOT NULL,
+
+    FOREIGN KEY (BookingID) REFERENCES BOOKING(BookingID),
+    FOREIGN KEY (StudentID) REFERENCES STUDENT(UserID)
+);
